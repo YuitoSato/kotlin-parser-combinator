@@ -4,10 +4,6 @@ import me.alllex.parsus.parser.*
 import me.alllex.parsus.token.*
 import kotlin.math.pow
 
-import me.alllex.parsus.parser.*
-import me.alllex.parsus.token.*
-import kotlin.math.pow
-
 sealed class Expr {
   data class Con(val value: Int) : Expr()
   data class Var(val name: String) : Expr()
