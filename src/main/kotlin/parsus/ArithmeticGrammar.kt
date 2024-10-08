@@ -107,13 +107,12 @@ class ArithmeticEvaluator(val variables: Map<String, Int>) {
 }
 
 fun main() {
-  val input = "AVG(A, B, C, (A + B + C))"
-  val expr = ExprParser.parseOrThrow(input) // 式をパース
-
   val variableMap = mapOf("A" to 3, "B" to 4, "C" to 5) // 変数の値を定義
   val evaluator = ArithmeticEvaluator(variableMap)
 
-  val result = evaluator.evaluate(expr) // 式を評価
+  val input = "AVG(A, B, C, (A + B + C))"
+  val expr = ExprParser.parseOrThrow(input) // 式をパース
 
+  val result = evaluator.evaluate(expr) // 式を評価
   println("結果: $result") // 結果を表示
 }
