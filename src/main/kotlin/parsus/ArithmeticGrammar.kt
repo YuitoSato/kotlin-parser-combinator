@@ -7,7 +7,16 @@ import kotlin.math.pow
 sealed class Expr {
   data class Con(val value: Int) : Expr()
   data class Var(val name: String) : Expr()
-  data class FuncCall(val name: String, val args: List<Expr>) : Expr()
+  sealed class FuncCall : Expr() {
+    abstract val args: List<Expr>
+
+    data class Avg(override val args: List<Expr>) : FuncCall() {
+      companion object {
+        val name = "AVG"
+      }
+    }
+    // 他の関数が必要であれば、ここに追加できます
+  }
   data class Neg(val expr: Expr) : Expr()
   data class Pow(val left: Expr, val right: Expr) : Expr()
   data class Mul(val left: Expr, val right: Expr) : Expr()
@@ -37,7 +46,12 @@ object ExprParser : Grammar<Expr>() {
   // 変数のパーサー
   val variable by ident map { Expr.Var(it.text) }
   // 関数呼び出しのパーサー
-  val funcCall by ident * -lpar * separated(ref(::expr), comma) * -rpar map { (name, args) -> Expr.FuncCall(name.text, args) }
+  val funcCall by ident * -lpar * separated(ref(::expr), comma) * -rpar map { (nameToken, args) ->
+    when (nameToken.text) {
+      Expr.FuncCall.Avg.name -> Expr.FuncCall.Avg(args)
+      else -> error("未知の関数: ${nameToken.text}")
+    }
+  }
 
   // 括弧で囲まれた式のパーサー
   val braced by -lpar * ref(::expr) * -rpar
@@ -66,7 +80,7 @@ object ExprParser : Grammar<Expr>() {
   val expr: Parser<Expr> by addExpr
 
   // ルートパーサー
-  override val root by parser { expr() } // 入力の終わりまでパースする
+  override val root by expr
 }
 
 class ArithmeticEvaluator(val variables: Map<String, Int>) {
@@ -74,26 +88,21 @@ class ArithmeticEvaluator(val variables: Map<String, Int>) {
   fun evaluate(expr: Expr): Int = when (expr) {
     is Expr.Con -> expr.value
     is Expr.Var -> variables[expr.name] ?: error("未定義の変数: ${expr.name}")
-    is Expr.FuncCall -> evaluateFunction(expr.name, expr.args)
+    is Expr.FuncCall -> when (expr) {
+      is Expr.FuncCall.Avg -> {
+        val argValues = expr.args.map { evaluate(it) }
+        val sum = argValues.sum()
+        val average = sum.toDouble() / argValues.size
+        average.toInt() // 必要に応じて四捨五入
+      }
+      // 他の関数が必要であれば、ここに追加できます
+    }
     is Expr.Neg -> -evaluate(expr.expr)
     is Expr.Pow -> evaluate(expr.left).toDouble().pow(evaluate(expr.right).toDouble()).toInt()
     is Expr.Mul -> evaluate(expr.left) * evaluate(expr.right)
     is Expr.Div -> evaluate(expr.left) / evaluate(expr.right)
     is Expr.Add -> evaluate(expr.left) + evaluate(expr.right)
     is Expr.Sub -> evaluate(expr.left) - evaluate(expr.right)
-  }
-
-  // 関数を評価する関数
-  private fun evaluateFunction(name: String, args: List<Expr>): Int {
-    return when (name) {
-      "AVG" -> {
-        val argValues = args.map { evaluate(it) }
-        val sum = argValues.sum()
-        val average = sum.toDouble() / argValues.size
-        average.toInt() // 必要に応じて四捨五入
-      }
-      else -> error("未知の関数: $name")
-    }
   }
 }
 
