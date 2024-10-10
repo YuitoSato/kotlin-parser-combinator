@@ -3,26 +3,29 @@ package com.example.parsus
 import me.alllex.parsus.parser.*
 import me.alllex.parsus.token.*
 import kotlin.math.pow
+import kotlin.time.measureTimedValue
 
-sealed class Expr {
-  data class Con(val value: Int) : Expr()
-  data class Var(val name: String) : Expr()
-  sealed class FuncCall : Expr() {
-    abstract val args: List<Expr>
-
-    data class Avg(override val args: List<Expr>) : FuncCall() {
+sealed interface Expr {
+  data class Con(val value: Int) : Expr
+  data class Var(val name: String) : Expr
+  sealed interface FuncCall : Expr {
+    inline class Average(val args: List<Expr>) : FuncCall {
       companion object {
-        val name = "AVG"
+        const val NAME = "AVERAGE"
       }
     }
-    // 他の関数が必要であれば、ここに追加できます
+    inline class Sum(val args: List<Expr>) : FuncCall {
+      companion object {
+        const val NAME = "SUM"
+      }
+    }
   }
-  data class Neg(val expr: Expr) : Expr()
-  data class Pow(val left: Expr, val right: Expr) : Expr()
-  data class Mul(val left: Expr, val right: Expr) : Expr()
-  data class Div(val left: Expr, val right: Expr) : Expr()
-  data class Add(val left: Expr, val right: Expr) : Expr()
-  data class Sub(val left: Expr, val right: Expr) : Expr()
+  data class Neg(val expr: Expr) : Expr
+  data class Pow(val left: Expr, val right: Expr) : Expr
+  data class Mul(val left: Expr, val right: Expr) : Expr
+  data class Div(val left: Expr, val right: Expr) : Expr
+  data class Add(val left: Expr, val right: Expr) : Expr
+  data class Sub(val left: Expr, val right: Expr) : Expr
 }
 
 object ExprParser : Grammar<Expr>() {
@@ -48,7 +51,8 @@ object ExprParser : Grammar<Expr>() {
   // 関数呼び出しのパーサー
   val funcCall by ident * -lpar * separated(ref(::expr), comma) * -rpar map { (nameToken, args) ->
     when (nameToken.text) {
-      Expr.FuncCall.Avg.name -> Expr.FuncCall.Avg(args)
+      Expr.FuncCall.Average.NAME -> Expr.FuncCall.Average(args)
+      Expr.FuncCall.Sum.NAME -> Expr.FuncCall.Sum(args)
       else -> error("未知の関数: ${nameToken.text}")
     }
   }
@@ -83,19 +87,23 @@ object ExprParser : Grammar<Expr>() {
   override val root by expr
 }
 
-class ArithmeticEvaluator(val variables: Map<String, Int>) {
+class ExprEvaluator(val variables: Map<String, Int>) {
   // 式を評価する関数
   fun evaluate(expr: Expr): Int = when (expr) {
     is Expr.Con -> expr.value
     is Expr.Var -> variables[expr.name] ?: error("未定義の変数: ${expr.name}")
     is Expr.FuncCall -> when (expr) {
-      is Expr.FuncCall.Avg -> {
+      is Expr.FuncCall.Average -> {
         val argValues = expr.args.map { evaluate(it) }
         val sum = argValues.sum()
         val average = sum.toDouble() / argValues.size
         average.toInt() // 必要に応じて四捨五入
       }
-      // 他の関数が必要であれば、ここに追加できます
+      is Expr.FuncCall.Sum -> {
+        val argValues = expr.args.map { evaluate(it) }
+        val sum = argValues.sum()
+        sum
+      }
     }
     is Expr.Neg -> -evaluate(expr.expr)
     is Expr.Pow -> evaluate(expr.left).toDouble().pow(evaluate(expr.right).toDouble()).toInt()
@@ -108,11 +116,41 @@ class ArithmeticEvaluator(val variables: Map<String, Int>) {
 
 fun main() {
   val variableMap = mapOf("A" to 3, "B" to 4, "C" to 5) // 変数の値を定義
-  val evaluator = ArithmeticEvaluator(variableMap)
+  val evaluator = ExprEvaluator(variableMap)
 
-  val input = "AVG(A, B, C, (A + B + C))"
+  val input = "SUM(A, B, C, (A + B + C))"
   val expr = ExprParser.parseOrThrow(input) // 式をパース
 
   val result = evaluator.evaluate(expr) // 式を評価
   println("結果: $result") // 結果を表示
+
+  val max = 1_000_000
+
+  val input2 = "A * B"
+  val expr2 = ExprParser.parseOrThrow(input2) // 式をパース
+
+  val (result0, duration0) = measureTimedValue {
+    (0..max).map {
+      3 * 4 // 式を評価
+    }
+  }
+  println(result0.first())
+  println(duration0)
+
+  val (result1, duration1) = measureTimedValue {
+    (0..max).map {
+      evaluator.evaluate(expr2) // 式を評価
+    }
+  }
+  println(result1.first())
+  println(duration1)
+
+  val (result2, duration2) = measureTimedValue {
+    (0..max).map {
+      val expr2 = ExprParser.parseOrThrow("A * B") // 式をパース
+      evaluator.evaluate(expr2) // 式を評価
+    }
+  }
+  println(result2.first())
+  println(duration2)
 }
